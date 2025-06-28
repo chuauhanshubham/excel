@@ -16,7 +16,7 @@ fs.ensureDirSync(outputDir);
 
 // ==== CORS Fix ====
 const corsOptions = {
-  origin: 'https://tiny-cocada-12e3a5.netlify.app', // 👈 Your frontend domain here
+  origin: 'https://shimmering-peony-4e14ba.netlify.app/', // 👈 Your frontend domain here
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 };
