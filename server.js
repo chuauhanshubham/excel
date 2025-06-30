@@ -19,7 +19,7 @@ fs.ensureDirSync(uploadDir);
 fs.ensureDirSync(outputDir);
 
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || '*',
+  origin: process.env.CLIENT_ORIGIN || 'https://bucolic-crisp-e07d2c.netlify.app/',
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 }));
