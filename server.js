@@ -1,5 +1,5 @@
 // ======================
-// Backend - server.js
+// server.js (FINAL VERSION)
 // ======================
 
 require('dotenv').config();
@@ -18,18 +18,22 @@ const outputDir = path.join(__dirname, 'output');
 fs.ensureDirSync(uploadDir);
 fs.ensureDirSync(outputDir);
 
+// ✅ Dynamic CORS from environment
 app.use(cors({
-  origin: 'https://coruscating-licorice-3c3a1b.netlify.app/', // ✅ Replace with actual Netlify URL
+  origin: process.env.CLIENT_ORIGIN,
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 }));
 
+
 app.use(express.json());
 app.use('/output', express.static(outputDir));
 
+// ======================
+// Utils
+// ======================
 let globalDataMap = { "1": [], "2": [] };
 
-// ✅ Save files in 'uploads/' folder
 const storage = multer.diskStorage({
   destination: uploadDir,
   filename: (req, file, cb) => {
@@ -43,8 +47,7 @@ const fileFilter = (req, file, cb) => {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-excel'
   ];
-  if (allowed.includes(file.mimetype)) cb(null, true);
-  else cb(new Error('Only Excel files allowed'), false);
+  cb(null, allowed.includes(file.mimetype));
 };
 
 const upload = multer({ storage, fileFilter });
@@ -62,7 +65,9 @@ function extractDateOnly(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
-// ✅ Changed from '/upload' to '/api/upload'
+// ======================
+// Upload Endpoint
+// ======================
 app.post('/api/upload', upload.single('file'), (req, res) => {
   try {
     const panelId = req.query.type === 'Withdrawal' ? '2' : '1';
@@ -76,10 +81,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 
     const processedData = rawData.map(row => {
       const dateVal = row['Date'] || row['Transaction Date'] || row['Created At'];
-      return {
-        ...row,
-        DateOnly: extractDateOnly(dateVal)
-      };
+      return { ...row, DateOnly: extractDateOnly(dateVal) };
     });
 
     const merchants = [...new Set(processedData.map(r => r['Merchant Name']).filter(Boolean))];
@@ -91,7 +93,9 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
   }
 });
 
-// ✅ Changed from '/generate' to '/api/generate'
+// ======================
+// Generate Endpoint
+// ======================
 app.post('/api/generate', (req, res) => {
   try {
     const { merchantPercents, startDate, endDate } = req.body;
@@ -189,6 +193,9 @@ app.post('/api/generate', (req, res) => {
   }
 });
 
+// ======================
+// Start Server
+// ======================
 app.listen(PORT, () => {
   console.log(`✅ Server running at http://localhost:${PORT}`);
 });
