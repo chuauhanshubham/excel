@@ -19,7 +19,7 @@ fs.ensureDirSync(uploadDir);
 fs.ensureDirSync(outputDir);
 
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || '',
+  origin: process.env.CLIENT_ORIGIN || 'https://legendary-platypus-a867b5.netlify.app/',
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 }));
