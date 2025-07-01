@@ -19,7 +19,7 @@ fs.ensureDirSync(uploadDir);
 fs.ensureDirSync(outputDir);
 
 app.use(cors({
-  origin: process.env.CLIENT_ORIGIN || 'https://legendary-platypus-a867b5.netlify.app/',
+  origin: 'https://coruscating-licorice-3c3a1b.netlify.app/', // ✅ Replace with actual Netlify URL
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 }));
@@ -29,10 +29,11 @@ app.use('/output', express.static(outputDir));
 
 let globalDataMap = { "1": [], "2": [] };
 
+// ✅ Save files in 'uploads/' folder
 const storage = multer.diskStorage({
   destination: uploadDir,
   filename: (req, file, cb) => {
-    const panelId = req.query.id || '1';
+    const panelId = req.query.type === 'Withdrawal' ? '2' : '1';
     cb(null, `panel-${panelId}-input.xlsx`);
   }
 });
@@ -61,9 +62,10 @@ function extractDateOnly(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
-app.post('/upload', upload.single('file'), (req, res) => {
+// ✅ Changed from '/upload' to '/api/upload'
+app.post('/api/upload', upload.single('file'), (req, res) => {
   try {
-    const panelId = req.query.id || '1';
+    const panelId = req.query.type === 'Withdrawal' ? '2' : '1';
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     const workbook = XLSX.readFile(req.file.path);
@@ -89,10 +91,11 @@ app.post('/upload', upload.single('file'), (req, res) => {
   }
 });
 
-app.post('/generate', (req, res) => {
+// ✅ Changed from '/generate' to '/api/generate'
+app.post('/api/generate', (req, res) => {
   try {
     const { merchantPercents, startDate, endDate } = req.body;
-    const panelId = req.query.id || '1';
+    const panelId = req.query.type === 'Withdrawal' ? '2' : '1';
     const data = globalDataMap[panelId];
 
     if (!data.length) return res.status(400).json({ error: 'No data available' });
