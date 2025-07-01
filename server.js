@@ -1,7 +1,3 @@
-// ======================
-// server.js (FINAL VERSION)
-// ======================
-
 require('dotenv').config();
 const express = require('express');
 const multer = require('multer');
@@ -9,31 +5,61 @@ const XLSX = require('xlsx');
 const fs = require('fs-extra');
 const path = require('path');
 const cors = require('cors');
+const mongoose = require('mongoose');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Directories
 const uploadDir = path.join(__dirname, 'uploads');
 const outputDir = path.join(__dirname, 'output');
 fs.ensureDirSync(uploadDir);
 fs.ensureDirSync(outputDir);
 
-// ✅ Dynamic CORS from environment
+// ✅ MongoDB connection
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true, useUnifiedTopology: true
+}).then(() => console.log('✅ Connected to MongoDB'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
+
+// ✅ MongoDB Models
+const UploadedFile = mongoose.model('UploadedFile', new mongoose.Schema({
+  panelId: String,
+  originalName: String,
+  filePath: String,
+  uploadedAt: { type: Date, default: Date.now },
+  merchants: [String],
+  data: [mongoose.Schema.Types.Mixed]
+}));
+
+const Report = mongoose.model('Report', new mongoose.Schema({
+  panelId: String,
+  startDate: String,
+  endDate: String,
+  merchantPercents: mongoose.Schema.Types.Mixed,
+  summary: [mongoose.Schema.Types.Mixed],
+  downloadUrl: String,
+  createdAt: { type: Date, default: Date.now }
+}));
+
+// ✅ CORS
 app.use(cors({
   origin: process.env.CLIENT_ORIGIN,
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 }));
 
-
 app.use(express.json());
 app.use('/output', express.static(outputDir));
 
 // ======================
-// Utils
+// In-Memory Cache
 // ======================
 let globalDataMap = { "1": [], "2": [] };
 
+// ======================
+// Multer Config
+// ======================
 const storage = multer.diskStorage({
   destination: uploadDir,
   filename: (req, file, cb) => {
@@ -52,6 +78,9 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({ storage, fileFilter });
 
+// ======================
+// Helper: Date Extractor
+// ======================
 function extractDateOnly(value) {
   if (!value) return '';
   if (typeof value === 'number') {
@@ -68,7 +97,7 @@ function extractDateOnly(value) {
 // ======================
 // Upload Endpoint
 // ======================
-app.post('/api/upload', upload.single('file'), (req, res) => {
+app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
     const panelId = req.query.type === 'Withdrawal' ? '2' : '1';
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -87,6 +116,15 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     const merchants = [...new Set(processedData.map(r => r['Merchant Name']).filter(Boolean))];
     globalDataMap[panelId] = processedData;
 
+    // ✅ Save to MongoDB
+    await UploadedFile.create({
+      panelId,
+      originalName: req.file.originalname,
+      filePath: req.file.path,
+      merchants,
+      data: processedData
+    });
+
     res.json({ success: true, merchants });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Upload failed' });
@@ -96,7 +134,7 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 // ======================
 // Generate Endpoint
 // ======================
-app.post('/api/generate', (req, res) => {
+app.post('/api/generate', async (req, res) => {
   try {
     const { merchantPercents, startDate, endDate } = req.body;
     const panelId = req.query.type === 'Withdrawal' ? '2' : '1';
@@ -183,10 +221,22 @@ app.post('/api/generate', (req, res) => {
     const filepath = path.join(outputDir, filename);
     XLSX.writeFile(wb, filepath);
 
+    const downloadUrl = `/output/${filename}`;
+
+    // ✅ Save report to MongoDB
+    await Report.create({
+      panelId,
+      startDate: normalizedStart,
+      endDate: normalizedEnd,
+      merchantPercents,
+      summary: summaryData,
+      downloadUrl
+    });
+
     res.json({
       success: true,
       summary: summaryData,
-      downloadUrl: `/output/${filename}`
+      downloadUrl
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to generate summary' });
