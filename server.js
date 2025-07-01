@@ -7,59 +7,39 @@ const path = require('path');
 const cors = require('cors');
 const mongoose = require('mongoose');
 
+// Models
+const UploadedFile = require('./models/UploadedFile');
+const Report = require('./models/Report');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Directories
+// Ensure directories exist
 const uploadDir = path.join(__dirname, 'uploads');
 const outputDir = path.join(__dirname, 'output');
 fs.ensureDirSync(uploadDir);
 fs.ensureDirSync(outputDir);
 
-// ✅ MongoDB connection
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true, useUnifiedTopology: true
-}).then(() => console.log('✅ Connected to MongoDB'))
-  .catch(err => console.error('❌ MongoDB connection error:', err));
-
-// ✅ MongoDB Models
-const UploadedFile = mongoose.model('UploadedFile', new mongoose.Schema({
-  panelId: String,
-  originalName: String,
-  filePath: String,
-  uploadedAt: { type: Date, default: Date.now },
-  merchants: [String],
-  data: [mongoose.Schema.Types.Mixed]
-}));
-
-const Report = mongoose.model('Report', new mongoose.Schema({
-  panelId: String,
-  startDate: String,
-  endDate: String,
-  merchantPercents: mongoose.Schema.Types.Mixed,
-  summary: [mongoose.Schema.Types.Mixed],
-  downloadUrl: String,
-  createdAt: { type: Date, default: Date.now }
-}));
-
-// ✅ CORS
+// Middleware
 app.use(cors({
   origin: process.env.CLIENT_ORIGIN,
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type']
 }));
-
 app.use(express.json());
 app.use('/output', express.static(outputDir));
 
-// ======================
-// In-Memory Cache
-// ======================
+// MongoDB connection
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+}).then(() => console.log('✅ Connected to MongoDB'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
+
+// In-memory cache
 let globalDataMap = { "1": [], "2": [] };
 
-// ======================
-// Multer Config
-// ======================
+// Multer setup
 const storage = multer.diskStorage({
   destination: uploadDir,
   filename: (req, file, cb) => {
@@ -67,7 +47,6 @@ const storage = multer.diskStorage({
     cb(null, `panel-${panelId}-input.xlsx`);
   }
 });
-
 const fileFilter = (req, file, cb) => {
   const allowed = [
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -75,12 +54,9 @@ const fileFilter = (req, file, cb) => {
   ];
   cb(null, allowed.includes(file.mimetype));
 };
-
 const upload = multer({ storage, fileFilter });
 
-// ======================
-// Helper: Date Extractor
-// ======================
+// Date parser
 function extractDateOnly(value) {
   if (!value) return '';
   if (typeof value === 'number') {
@@ -94,9 +70,7 @@ function extractDateOnly(value) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
-// ======================
-// Upload Endpoint
-// ======================
+// Upload endpoint
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   try {
     const panelId = req.query.type === 'Withdrawal' ? '2' : '1';
@@ -116,7 +90,6 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     const merchants = [...new Set(processedData.map(r => r['Merchant Name']).filter(Boolean))];
     globalDataMap[panelId] = processedData;
 
-    // ✅ Save to MongoDB
     await UploadedFile.create({
       panelId,
       originalName: req.file.originalname,
@@ -131,9 +104,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// ======================
-// Generate Endpoint
-// ======================
+// Generate report
 app.post('/api/generate', async (req, res) => {
   try {
     const { merchantPercents, startDate, endDate } = req.body;
@@ -223,7 +194,6 @@ app.post('/api/generate', async (req, res) => {
 
     const downloadUrl = `/output/${filename}`;
 
-    // ✅ Save report to MongoDB
     await Report.create({
       panelId,
       startDate: normalizedStart,
@@ -243,9 +213,7 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
-// ======================
-// Start Server
-// ======================
+// Start server
 app.listen(PORT, () => {
   console.log(`✅ Server running at http://localhost:${PORT}`);
 });
